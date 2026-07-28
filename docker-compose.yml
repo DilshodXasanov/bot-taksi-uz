@@ -1,0 +1,41 @@
+version: '3.8'
+
+services:
+  web_admin:
+    build: .
+    command: gunicorn config.wsgi:application --bind 0.0.0.0:8000 --chdir WEB_ADMIN_DJANGO
+    volumes:
+      - .:/app
+      - sqlite_data:/app/db_data
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    restart: always
+
+  passenger_bot:
+    build: .
+    command: python BOT_YOLOVCHI/main.py
+    volumes:
+      - .:/app
+      - sqlite_data:/app/db_data
+    env_file:
+      - .env
+    restart: always
+    depends_on:
+      - web_admin
+
+  driver_bot:
+    build: .
+    command: python BOT_HAYDOVCHI/main.py
+    volumes:
+      - .:/app
+      - sqlite_data:/app/db_data
+    env_file:
+      - .env
+    restart: always
+    depends_on:
+      - web_admin
+
+volumes:
+  sqlite_data:

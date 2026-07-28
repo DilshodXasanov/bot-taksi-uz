@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Taxi Bot - Haydovchilar</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+
+    <!-- Sidebar -->
+    <aside class="sidebar">
+        <a href="/" class="logo">
+            🚕 Taxi<span>Panel</span>
+        </a>
+        <nav class="nav-links">
+            <a href="/" class="nav-link">📊 Asosiy Dashboard</a>
+            <a href="/drivers" class="nav-link active">🚗 Haydovchilar</a>
+        </nav>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main-content">
+        <header class="header">
+            <h1>Haydovchilarni Boshqarish</h1>
+            <p>Yangi haydovchilarni tasdiqlash yoki bazadagilarni tekshirish.</p>
+        </header>
+
+        <div class="card">
+            <h2>Barcha haydovchilar ro'yxati</h2>
+            
+            <table>
+                <thead>
+                    <tr>
+                        <th>Ism Familya</th>
+                        <th>Telefon</th>
+                        <th>Mashina</th>
+                        <th>Raqam</th>
+                        <th>Holati</th>
+                        <th>Sayohatlar</th>
+                        <th>Harakatlar</th>
+                    </tr>
+                </thead>
+                <tbody id="drivers-table-body">
+                    <!-- JavaScript orqali to'ldiriladi -->
+                    <tr>
+                        <td colspan="7" style="text-align:center;">Yuklanmoqda...</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </main>
+
+    <script>
+        async function fetchWithAuth(url, options = {}) {
+            const token = localStorage.getItem('access_token');
+            if (!token) {
+                window.location.href = '/login/';
+                return null;
+            }
+            if (!options.headers) options.headers = {};
+            options.headers['Authorization'] = `Bearer ${token}`;
+            let res = await fetch(url, options);
+            if (res.status === 401) {
+                const refreshToken = localStorage.getItem('refresh_token');
+                if (refreshToken) {
+                    const refreshRes = await fetch('/api/token/refresh/', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({refresh: refreshToken})
+                    });
+                    
+                    if (refreshRes.ok) {
+                        const data = await refreshRes.json();
+                        localStorage.setItem('access_token', data.access);
+                        options.headers['Authorization'] = `Bearer ${data.access}`;
+                        res = await fetch(url, options);
+                        return res;
+                    }
+                }
+                
+                localStorage.removeItem('access_token');
+                localStorage.removeItem('refresh_token');
+                window.location.href = '/login/';
+                return null;
+            } else if (res.status === 403) {
+                localStorage.removeItem('access_token');
+                localStorage.removeItem('refresh_token');
+                window.location.href = '/login/';
+                return null;
+            }
+            return res;
+        }
+
+        async function fetchDrivers() {
+            try {
+                const res = await fetchWithAuth('/api/drivers/');
+                if (!res) return;
+                const drivers = await res.json();
+                
+                const tbody = document.getElementById('drivers-table-body');
+                tbody.innerHTML = '';
+                
+                if(drivers.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;">Haydovchilar topilmadi</td></tr>';
+                    return;
+                }
+
+                drivers.forEach(driver => {
+                    const statusBadge = driver.is_approved 
+                        ? '<span class="badge approved">Tasdiqlangan</span>' 
+                        : '<span class="badge pending">Kutilmoqda</span>';
+                    
+                    const actions = !driver.is_approved ? `
+                        <div class="actions">
+                            <button class="btn btn-approve" onclick="approveDriver(${driver.telegram_id})">Tasdiqlash</button>
+                            <button class="btn btn-reject" onclick="rejectDriver(${driver.telegram_id})">Rad etish</button>
+                        </div>
+                    ` : `
+                        <div class="actions">
+                            <button class="btn btn-reject" onclick="rejectDriver(${driver.telegram_id})">O'chirish</button>
+                        </div>
+                    `;
+
+                    tbody.innerHTML += `
+                        <tr>
+                            <td>${driver.full_name}</td>
+                            <td>${driver.phone}</td>
+                            <td>${driver.car_model}</td>
+                            <td><strong>${driver.car_number}</strong></td>
+                            <td>${statusBadge}</td>
+                            <td>${driver.total_rides} marta</td>
+                            <td>${actions}</td>
+                        </tr>
+                    `;
+                });
+            } catch (error) {
+                console.error("Xato:", error);
+            }
+        }
+
+        async function approveDriver(id) {
+            if(!confirm("Haqiqatan ham ushbu haydovchini tasdiqlaysizmi?")) return;
+            await fetchWithAuth(`/api/drivers/${id}/approve/`, {method: 'POST'});
+            fetchDrivers();
+        }
+
+        async function rejectDriver(id) {
+            if(!confirm("Haqiqatan ham ushbu haydovchini o'chirasizmi?")) return;
+            await fetchWithAuth(`/api/drivers/${id}/reject/`, {method: 'POST'});
+            fetchDrivers();
+        }
+
+        window.onload = fetchDrivers;
+    </script>
+</body>
+</html>
