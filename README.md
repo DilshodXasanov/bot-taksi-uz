@@ -4,35 +4,49 @@ Ushbu loyiha Telegram platformasida ishlovchi, to'liq funksional taksi xizmatini
 
 ## 🏗 Loyiha Arxitekturasi va Texnologiyalar
 
-- **Dasturlash tili:** Python 3.14
-- **Asosiy kutubxona:** `aiogram 3.15.0` (Telegram bot API bilan ishlash uchun eng zamonaviy asinxron kutubxona)
-- **Ma'lumotlar bazasi:** SQLite (`aiosqlite` orqali asinxron ulanish) - Ma'lumotlarni yengil va tez saqlash uchun.
-- **Geolokatsiya va masofa:** `geopy` - Haversine formulasi yordamida koordinatalar (kenglik va uzunlik) orqali masofani hisoblash uchun.
+- **Dasturlash tili:** Python 3.11
+- **Asosiy kutubxona:** `aiogram 3.x` (Telegram bot API bilan ishlash uchun eng zamonaviy asinxron kutubxona)
+- **Ma'lumotlar bazasi:** PostgreSQL (`asyncpg` orqali asinxron ulanish, connection pool bilan) — Ishonchli va tezkor ma'lumotlarni saqlash uchun.
+- **Web Admin:** Django + Django REST Framework + SimpleJWT autentifikatsiya
+- **Geolokatsiya va masofa:** OSRM API (haqiqiy mashina marshruti) + Haversine formulasi (fallback)
 - **Konfiguratsiya:** `python-dotenv` - Maxfiy ma'lumotlar (Tokenlar, narxlar) ni `.env` faylida xavfsiz saqlash uchun.
+- **Konteynerizatsiya:** Docker + Docker Compose
 
 ## 📂 Loyiha Strukturasi
 
 ```text
 BOT_TAKSI/
 │
-├── .env                    # Bot tokenlari, narxlar va sozlamalar saqlanadigan fayl.
+├── .env                    # Bot tokenlari, narxlar, PostgreSQL sozlamalari.
 ├── requirements.txt        # Loyihaga kerakli Python kutubxonalar ro'yxati.
-├── taxi.db                 # SQLite ma'lumotlar bazasi fayli (avtomatik yaratiladi).
+├── docker-compose.yml      # Docker Compose (PostgreSQL + 2 bot + Django).
+├── Dockerfile              # Docker image yaratish uchun.
+├── entrypoint.sh           # Docker entrypoint (PostgreSQL kutish + migratsiya).
+├── migrate_data.py         # SQLite → PostgreSQL data ko'chirish skripti.
 ├── README.md               # Loyiha haqida ma'lumot (ushbu fayl).
 │
 ├── shared/                 # Ikkala bot uchun umumiy bo'lgan kodlar
 │   ├── __init__.py
 │   ├── config.py           # .env dan o'zgaruvchilarni o'qib beruvchi modul.
-│   ├── database.py         # DB yaratish va barcha SQL so'rovlar (CRUD) yozilgan modul.
+│   ├── database.py         # PostgreSQL connection pool va barcha SQL so'rovlar (CRUD).
 │   └── utils.py            # Masofa va narxni hisoblash, yaqin haydovchilarni qidirish funksiyalari.
 │
 ├── BOT_YOLOVCHI/           # Yo'lovchilar uchun bot
 │   ├── main.py             # Botning asosiy mantig'i (buyurtma berish, tarix, baholash).
 │   └── keyboards.py        # Yo'lovchi botining menyu va tugmalari.
 │
-└── BOT_HAYDOVCHI/          # Haydovchilar uchun bot
-    ├── main.py             # Botning asosiy mantig'i (onlayn bo'lish, buyurtma qabul qilish).
-    └── keyboards.py        # Haydovchi botining menyu va tugmalari.
+├── BOT_HAYDOVCHI/          # Haydovchilar uchun bot
+│   ├── main.py             # Botning asosiy mantig'i (onlayn bo'lish, buyurtma qabul qilish).
+│   └── keyboards.py        # Haydovchi botining menyu va tugmalari.
+│
+├── WEB_ADMIN/              # Admin panel frontend
+│   ├── templates/          # HTML sahifalar (dashboard, drivers, login)
+│   └── static/             # CSS, JavaScript
+│
+└── WEB_ADMIN_DJANGO/       # Admin panel backend
+    ├── config/             # Django settings, urls
+    ├── api/                # REST API (stats, drivers, approve/reject)
+    └── manage.py
 ```
 
 ## 🛠 Asosiy Funksionallik
@@ -59,14 +73,49 @@ BOT_TAKSI/
 Tizimda 4 ta asosiy jadval mavjud:
 1. `passengers`: Yo'lovchi ID, ism, telefon raqam.
 2. `drivers`: Haydovchi ID, ism, mashina modeli, onlayn holati, reytingi (1.0 - 5.0 gacha), hozirgi lokatsiyasi (lat, lng).
-3. `orders`: Buyurtma tafsilotlari (qayerdan, qayerga, kim buyurtma berdi, qaysi haydovchi oldi, narxi, masofasi va holati - *searching, accepted, riding, completed, cancelled*).
+3. `orders`: Buyurtma tafsilotlari (qayerdan, qayerga, kim buyurtma berdi, qaysi haydovchi oldi, narxi, masofasi va holati — *searching, accepted, riding, completed, cancelled*).
 4. `reviews`: Safar yakunlangach berilgan baholar (rating).
 
-## 🚀 Ishga tushirish qoidalari
+## 🚀 Ishga tushirish
 
-1. `requirements.txt` dagi kutubxonalarni o'rnatish: `pip install -r requirements.txt`
-2. `.env` faylida ikkala bot tokenini kiritish.
-3. Yo'lovchi botini ishga tushirish: `python BOT_YOLOVCHI/main.py`
-4. Haydovchi botini ishga tushirish: `python BOT_HAYDOVCHI/main.py`
+### Docker bilan (tavsiya etiladi):
+```bash
+docker-compose up --build -d
+```
+
+### Qo'lda (Docker siz):
+
+1. PostgreSQL o'rnatish va bazani yaratish:
+```sql
+CREATE DATABASE taxi_db;
+CREATE USER taxi_user WITH PASSWORD 'taxi_secure_pass_2024';
+GRANT ALL PRIVILEGES ON DATABASE taxi_db TO taxi_user;
+```
+
+2. `.env` faylida PostgreSQL sozlamalarini to'g'rilash.
+
+3. Kutubxonalarni o'rnatish:
+```bash
+pip install -r requirements.txt
+```
+
+4. Agar eski SQLite dan data ko'chirish kerak bo'lsa:
+```bash
+python migrate_data.py
+```
+
+5. Botlarni ishga tushirish:
+```bash
+python BOT_YOLOVCHI/main.py
+python BOT_HAYDOVCHI/main.py
+```
+
+6. Django admin panelni ishga tushirish:
+```bash
+cd WEB_ADMIN_DJANGO
+python manage.py migrate
+python manage.py createsuperuser
+python manage.py runserver 0.0.0.0:8000
+```
 
 *Loyiha xavfsiz va asinxron tarzda ishlashga to'liq moslashtirilgan.*

@@ -11,8 +11,9 @@ from aiogram.types import Message, CallbackQuery, ContentType
 from aiogram.filters import CommandStart, Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
+from aiogram.fsm.storage.redis import RedisStorage, DefaultKeyBuilder
 
-from shared.config import PASSENGER_BOT_TOKEN, DRIVER_BOT_TOKEN, SEARCH_RADIUS_KM, ORDER_TIMEOUT
+from shared.config import PASSENGER_BOT_TOKEN, DRIVER_BOT_TOKEN, SEARCH_RADIUS_KM, ORDER_TIMEOUT, REDIS_URL
 from shared.database import (
     init_db, register_passenger, get_passenger, update_passenger_phone,
     create_order, get_order, get_active_order_by_passenger, cancel_order,
@@ -28,9 +29,10 @@ from keyboards import (
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Bot va Dispatcher
+# Bot va Dispatcher (RedisStorage — bot restart bo'lganda state saqlanadi)
 bot = Bot(token=PASSENGER_BOT_TOKEN)
-dp = Dispatcher()
+storage = RedisStorage.from_url(REDIS_URL, key_builder=DefaultKeyBuilder(prefix="passenger"))
+dp = Dispatcher(storage=storage)
 router = Router()
 dp.include_router(router)
 
@@ -244,14 +246,18 @@ async def confirm_order(callback: CallbackQuery, state: FSMContext):
     
     # Taymerni faqat haydovchi topilganda ishga tushirish
     if found:
-        asyncio.create_task(order_timeout_task(order_id, callback.from_user.id))
+        asyncio.create_task(order_timeout_task(order_id, callback.from_user.id, state))
+    else:
+        await state.clear()
 
-async def order_timeout_task(order_id: int, passenger_id: int):
+async def order_timeout_task(order_id: int, passenger_id: int, state: FSMContext = None):
     """Zombi buyurtmalarni o'chirish."""
     await asyncio.sleep(ORDER_TIMEOUT)
     order = await get_order(order_id)
     if order and order["status"] == "searching":
         await cancel_order(order_id)
+        if state:
+            await state.clear()
         try:
             await bot.send_message(
                 passenger_id,

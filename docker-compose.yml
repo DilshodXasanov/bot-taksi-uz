@@ -1,41 +1,86 @@
-version: '3.8'
-
 services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: taxi_db
+      POSTGRES_USER: taxi_user
+      POSTGRES_PASSWORD: taxi_secure_pass_2024
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    restart: always
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U taxi_user -d taxi_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    restart: always
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
   web_admin:
     build: .
     command: gunicorn config.wsgi:application --bind 0.0.0.0:8000 --chdir WEB_ADMIN_DJANGO
     volumes:
       - .:/app
-      - sqlite_data:/app/db_data
     ports:
       - "8000:8000"
+    environment:
+      - DB_HOST=postgres
     env_file:
       - .env
     restart: always
+    depends_on:
+      postgres:
+        condition: service_healthy
 
   passenger_bot:
     build: .
     command: python BOT_YOLOVCHI/main.py
     volumes:
       - .:/app
-      - sqlite_data:/app/db_data
+    environment:
+      - DB_HOST=postgres
+      - DATABASE_URL=postgresql://taxi_user:taxi_secure_pass_2024@postgres:5432/taxi_db
+      - REDIS_URL=redis://redis:6379/0
     env_file:
       - .env
     restart: always
     depends_on:
-      - web_admin
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
 
   driver_bot:
     build: .
     command: python BOT_HAYDOVCHI/main.py
     volumes:
       - .:/app
-      - sqlite_data:/app/db_data
+    environment:
+      - DB_HOST=postgres
+      - DATABASE_URL=postgresql://taxi_user:taxi_secure_pass_2024@postgres:5432/taxi_db
+      - REDIS_URL=redis://redis:6379/0
     env_file:
       - .env
     restart: always
     depends_on:
-      - web_admin
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
 
 volumes:
-  sqlite_data:
+  postgres_data:
+  redis_data:

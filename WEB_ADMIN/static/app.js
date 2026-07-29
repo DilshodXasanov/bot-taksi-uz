@@ -141,7 +141,11 @@ async function fetchLiveLocations() {
 }
 
 
-window.onload = () => {
-    fetchStats();
-    initMap();
-};
+document.addEventListener("DOMContentLoaded", () => {
+    if (document.getElementById('revenue-today')) {
+        fetchStats();
+    }
+    if (document.getElementById('live-map')) {
+        initMap();
+    }
+});

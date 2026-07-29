@@ -52,46 +52,8 @@
         </div>
     </main>
 
+    <script src="/static/app.js"></script>
     <script>
-        async function fetchWithAuth(url, options = {}) {
-            const token = localStorage.getItem('access_token');
-            if (!token) {
-                window.location.href = '/login/';
-                return null;
-            }
-            if (!options.headers) options.headers = {};
-            options.headers['Authorization'] = `Bearer ${token}`;
-            let res = await fetch(url, options);
-            if (res.status === 401) {
-                const refreshToken = localStorage.getItem('refresh_token');
-                if (refreshToken) {
-                    const refreshRes = await fetch('/api/token/refresh/', {
-                        method: 'POST',
-                        headers: {'Content-Type': 'application/json'},
-                        body: JSON.stringify({refresh: refreshToken})
-                    });
-                    
-                    if (refreshRes.ok) {
-                        const data = await refreshRes.json();
-                        localStorage.setItem('access_token', data.access);
-                        options.headers['Authorization'] = `Bearer ${data.access}`;
-                        res = await fetch(url, options);
-                        return res;
-                    }
-                }
-                
-                localStorage.removeItem('access_token');
-                localStorage.removeItem('refresh_token');
-                window.location.href = '/login/';
-                return null;
-            } else if (res.status === 403) {
-                localStorage.removeItem('access_token');
-                localStorage.removeItem('refresh_token');
-                window.location.href = '/login/';
-                return null;
-            }
-            return res;
-        }
 
         async function fetchDrivers() {
             try {
@@ -152,7 +114,7 @@
             fetchDrivers();
         }
 
-        window.onload = fetchDrivers;
+        document.addEventListener("DOMContentLoaded", fetchDrivers);
     </script>
 </body>
 </html>

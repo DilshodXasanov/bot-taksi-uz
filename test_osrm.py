@@ -1,3 +1,4 @@
+"""OSRM API orqali haqiqiy marshrut masofasini tekshirish."""
 import sys
 import os
 import asyncio

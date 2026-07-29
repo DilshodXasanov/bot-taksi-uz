@@ -8,9 +8,10 @@ ENV DJANGO_SETTINGS_MODULE config.settings
 # Set work directory
 WORKDIR /app
 
-# Install system dependencies (for building some python packages if needed)
+# Install system dependencies (gcc for building, libpq-dev for psycopg2)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
+    libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Install python dependencies

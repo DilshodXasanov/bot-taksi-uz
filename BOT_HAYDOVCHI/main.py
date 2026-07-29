@@ -11,8 +11,9 @@ from aiogram.types import Message, CallbackQuery, ContentType
 from aiogram.filters import CommandStart, Command, StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
+from aiogram.fsm.storage.redis import RedisStorage, DefaultKeyBuilder
 
-from shared.config import DRIVER_BOT_TOKEN, PASSENGER_BOT_TOKEN, ADMIN_ID
+from shared.config import DRIVER_BOT_TOKEN, PASSENGER_BOT_TOKEN, ADMIN_ID, REDIS_URL
 from shared.database import (
     init_db, register_driver, get_driver, set_driver_online,
     update_driver_location, get_order, accept_order, start_ride,
@@ -31,9 +32,10 @@ from keyboards import (
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Bot va Dispatcher
+# Bot va Dispatcher (RedisStorage — bot restart bo'lganda state saqlanadi)
 bot = Bot(token=DRIVER_BOT_TOKEN)
-dp = Dispatcher()
+storage = RedisStorage.from_url(REDIS_URL, key_builder=DefaultKeyBuilder(prefix="driver"))
+dp = Dispatcher(storage=storage)
 router = Router()
 dp.include_router(router)
 
@@ -272,6 +274,7 @@ async def accept_order_handler(callback: CallbackQuery, state: FSMContext):
 
     # Yo'lovchiga haydovchi topilganini xabar berish
     try:
+        from BOT_YOLOVCHI.keyboards import cancel_order_kb
         await passenger_bot.send_message(
             order["passenger_id"],
             f"🎉 <b>Haydovchi topildi!</b>\n\n"
@@ -280,7 +283,8 @@ async def accept_order_handler(callback: CallbackQuery, state: FSMContext):
             f"🔢 Raqam: {driver['car_number']}\n"
             f"📞 Telefon: {driver['phone']}\n"
             f"⭐ Reyting: {driver['rating']}/5\n\n"
-            f"Haydovchi sizga yo'lda! 🚗💨",
+            f"Haydovchi siz tomonga yo'l oldi.",
+            reply_markup=cancel_order_kb(),
             parse_mode="HTML"
         )
         # Yo'lovchiga haydovchining joylashuvini yuborish
@@ -653,7 +657,10 @@ async def process_broadcast(message: Message, state: FSMContext):
     
     for u in users:
         try:
-            await message.copy_to(u)
+            try:
+                await bot.copy_message(chat_id=u, from_chat_id=message.chat.id, message_id=message.message_id)
+            except Exception:
+                await passenger_bot.copy_message(chat_id=u, from_chat_id=message.chat.id, message_id=message.message_id)
             sent += 1
             await asyncio.sleep(0.05) # Telegram limitlariga tushmaslik uchun
         except Exception:

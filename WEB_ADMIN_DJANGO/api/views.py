@@ -49,11 +49,13 @@ def get_drivers(request):
     serializer = DriverSerializer(drivers, many=True)
     return Response(serializer.data)
 
-import urllib.request
-import urllib.parse
-import json
 import sys
 import os
+import threading
+import requests
+import logging
+
+logger = logging.getLogger(__name__)
 
 # To import shared config
 project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -61,14 +63,19 @@ if project_root not in sys.path:
     sys.path.insert(0, project_root)
 from shared.config import DRIVER_BOT_TOKEN
 
-def send_telegram_message(chat_id, text):
+def _send_msg_task(chat_id, text):
     url = f"https://api.telegram.org/bot{DRIVER_BOT_TOKEN}/sendMessage"
-    data = json.dumps({"chat_id": chat_id, "text": text, "parse_mode": "HTML"}).encode('utf-8')
-    req = urllib.request.Request(url, data=data, headers={'Content-Type': 'application/json'})
     try:
-        urllib.request.urlopen(req, timeout=5)
-    except Exception as e:
-        print(f"Failed to send telegram message: {e}")
+        response = requests.post(url, json={"chat_id": chat_id, "text": text, "parse_mode": "HTML"}, timeout=5)
+        response.raise_for_status()
+    except requests.RequestException as e:
+        logger.error(f"Failed to send telegram message to {chat_id}: {e}")
+
+def send_telegram_message(chat_id, text):
+    # Run in background thread to avoid blocking HTTP response
+    thread = threading.Thread(target=_send_msg_task, args=(chat_id, text))
+    thread.daemon = True
+    thread.start()
 
 
 @api_view(['POST'])
