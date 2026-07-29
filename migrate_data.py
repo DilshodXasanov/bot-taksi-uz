@@ -9,11 +9,25 @@ import asyncio
 import sqlite3
 import sys
 import os
+from datetime import datetime
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import asyncpg
 from shared.config import DATABASE_URL
+
+def parse_dt(dt_str):
+    if not dt_str: return None
+    try:
+        if '.' in dt_str:
+            return datetime.strptime(dt_str, "%Y-%m-%d %H:%M:%S.%f")
+        return datetime.strptime(dt_str, "%Y-%m-%d %H:%M:%S")
+    except Exception:
+        # Fallback if isoformat is used
+        try:
+            return datetime.fromisoformat(dt_str)
+        except:
+            return None
 
 # SQLite fayl yo'li
 SQLITE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "taxi.db")
@@ -110,10 +124,10 @@ async def migrate():
             try:
                 await pg_conn.execute(
                     """INSERT INTO passengers (telegram_id, full_name, phone, created_at) 
-                    VALUES ($1, $2, $3, $4::timestamp)
+                    VALUES ($1, $2, $3, $4)
                     ON CONFLICT (telegram_id) DO NOTHING""",
                     p['telegram_id'], p['full_name'], p['phone'],
-                    p['created_at'] if p['created_at'] else None
+                    parse_dt(p['created_at'])
                 )
                 count += 1
             except Exception as e:
@@ -131,12 +145,12 @@ async def migrate():
                 await pg_conn.execute(
                     """INSERT INTO drivers (telegram_id, full_name, phone, car_model, car_number, 
                     is_approved, is_online, latitude, longitude, rating, total_rides, created_at) 
-                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12::timestamp)
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
                     ON CONFLICT (telegram_id) DO NOTHING""",
                     d['telegram_id'], d['full_name'], d['phone'], d['car_model'], d['car_number'],
                     d['is_approved'], d['is_online'], d['latitude'], d['longitude'],
                     d['rating'], d['total_rides'],
-                    d['created_at'] if d['created_at'] else None
+                    parse_dt(d['created_at'])
                 )
                 count += 1
             except Exception as e:
@@ -157,14 +171,14 @@ async def migrate():
                     dest_lat, dest_lng, dest_address, distance_km, price, status, 
                     created_at, accepted_at, completed_at, cancelled_at)
                     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 
-                    $12::timestamp, $13::timestamp, $14::timestamp, $15::timestamp)""",
+                    $12, $13, $14, $15)""",
                     o['passenger_id'], o['driver_id'], o['pickup_lat'], o['pickup_lng'],
                     o['pickup_address'], o['dest_lat'], o['dest_lng'], o['dest_address'],
                     o['distance_km'], o['price'], o['status'],
-                    o['created_at'] if o['created_at'] else None,
-                    o['accepted_at'] if o['accepted_at'] else None,
-                    o['completed_at'] if o['completed_at'] else None,
-                    o['cancelled_at'] if o['cancelled_at'] else None
+                    parse_dt(o['created_at']),
+                    parse_dt(o['accepted_at']),
+                    parse_dt(o['completed_at']),
+                    parse_dt(o['cancelled_at'])
                 )
                 count += 1
             except Exception as e:
@@ -179,9 +193,9 @@ async def migrate():
             try:
                 await pg_conn.execute(
                     """INSERT INTO reviews (order_id, from_user, to_user, rating, comment, created_at)
-                    VALUES ($1, $2, $3, $4, $5, $6::timestamp)""",
+                    VALUES ($1, $2, $3, $4, $5, $6)""",
                     r['order_id'], r['from_user'], r['to_user'], r['rating'], r['comment'],
-                    r['created_at'] if r['created_at'] else None
+                    parse_dt(r['created_at'])
                 )
                 count += 1
             except Exception as e:
