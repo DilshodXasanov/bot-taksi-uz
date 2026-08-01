@@ -477,7 +477,17 @@ async def universal_cancel(message: Message, state: FSMContext):
 async def main():
     await init_db()
     logger.info("🚖 Yo'lovchi boti ishga tushmoqda...")
-    await dp.start_polling(bot)
+    try:
+        await dp.start_polling(bot)
+    finally:
+        # Graceful shutdown — barcha resurslarni to'g'ri yopish
+        from shared.utils import close_http_session
+        from shared.database import close_pool
+        await close_http_session()
+        await close_pool()
+        await driver_bot.session.close()
+        await bot.session.close()
+        logger.info("🔒 Yo'lovchi boti to'xtatildi")
 
 
 if __name__ == "__main__":

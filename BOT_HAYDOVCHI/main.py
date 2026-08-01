@@ -707,7 +707,17 @@ async def main():
     # Fonda zombie tozalash taymerini ishga tushirish
     asyncio.create_task(zombie_cleanup_loop())
     logger.info("🚗 Haydovchi boti ishga tushmoqda...")
-    await dp.start_polling(bot)
+    try:
+        await dp.start_polling(bot)
+    finally:
+        # Graceful shutdown — barcha resurslarni to'g'ri yopish
+        from shared.utils import close_http_session
+        from shared.database import close_pool
+        await close_http_session()
+        await close_pool()
+        await passenger_bot.session.close()
+        await bot.session.close()
+        logger.info("🔒 Haydovchi boti to'xtatildi")
 
 
 if __name__ == "__main__":
