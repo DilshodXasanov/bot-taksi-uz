@@ -246,18 +246,34 @@ async def confirm_order(callback: CallbackQuery, state: FSMContext):
     
     # Taymerni faqat haydovchi topilganda ishga tushirish
     if found:
-        asyncio.create_task(order_timeout_task(order_id, callback.from_user.id, state))
+        asyncio.create_task(order_timeout_task(order_id, callback.from_user.id))
     else:
         await state.clear()
 
-async def order_timeout_task(order_id: int, passenger_id: int, state: FSMContext = None):
-    """Zombi buyurtmalarni o'chirish."""
+async def order_timeout_task(order_id: int, passenger_id: int):
+    """Zombi buyurtmalarni o'chirish.
+    
+    MUHIM: Bu funksiya background task sifatida ishlaydi.
+    FSMContext ni parametr sifatida olmaymiz — chunki 60 soniyadan keyin
+    eski FSMContext obyekti eskiradi (stale) va deadlock qiladi.
+    O'rniga storage ga to'g'ridan-to'g'ri murojaat qilamiz.
+    """
     await asyncio.sleep(ORDER_TIMEOUT)
     order = await get_order(order_id)
     if order and order["status"] == "searching":
         await cancel_order(order_id)
-        if state:
-            await state.clear()
+        # Storage orqali state ni tozalash (FSMContext emas!)
+        try:
+            from aiogram.fsm.storage.base import StorageKey
+            key = StorageKey(
+                bot_id=bot.id,
+                chat_id=passenger_id,
+                user_id=passenger_id
+            )
+            await storage.set_state(key, state=None)
+            await storage.set_data(key, data={})
+        except Exception as e:
+            logger.error(f"State tozalashda xato: {e}")
         try:
             await bot.send_message(
                 passenger_id,
@@ -384,7 +400,7 @@ async def my_profile(message: Message):
             f"👤 <b>Sizning profilingiz:</b>\n\n"
             f"📛 Ism: {passenger['full_name']}\n"
             f"📱 Telefon: {phone}\n"
-            f"📅 Ro'yxatdan o'tgan: {passenger['created_at'][:10]}",
+            f"📅 Ro'yxatdan o'tgan: {str(passenger['created_at'])[:10]}",
             parse_mode="HTML"
         )
     else:
@@ -405,7 +421,7 @@ async def ride_history(message: Message):
         status_emoji = "✅" if h["status"] == "completed" else "❌"
         driver_name = h["driver_name"] or "noma'lum"
         price = format_price(h["price"]) if h["price"] else "—"
-        date = h["created_at"][:16] if h["created_at"] else "—"
+        date = str(h["created_at"])[:16] if h["created_at"] else "—"
         text += (
             f"{status_emoji} <b>Buyurtma #{h['id']}</b>\n"
             f"   🚗 Haydovchi: {driver_name}\n"

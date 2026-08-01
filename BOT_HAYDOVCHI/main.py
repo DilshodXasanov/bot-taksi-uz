@@ -547,7 +547,7 @@ async def ride_history(message: Message):
     for h in history:
         status_emoji = "✅" if h["status"] == "completed" else "❌"
         price = format_price(h["price"]) if h["price"] else "—"
-        date = h["created_at"][:16] if h["created_at"] else "—"
+        date = str(h["created_at"])[:16] if h["created_at"] else "—"
         text += (
             f"{status_emoji} <b>Buyurtma #{h['id']}</b>\n"
             f"   💰 Narx: {price}\n"
